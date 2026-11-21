@@ -1,0 +1,9 @@
+/.vs/
+*.user
+*.suo
+*.obj
+*.pdb
+*.res
+*.ilk
+Thumbs.db
+Desktop.ini
