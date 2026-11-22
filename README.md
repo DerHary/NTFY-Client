@@ -4,7 +4,7 @@ NTFY Client is a native Windows desktop client for self-hosted ntfy servers. It 
 
 ## Install and subscribe
 
-1. Run [NTFY Client 0.2.3 Setup (x64)](bin/NTFY-Client-Setup-x64.exe) on Windows 10 version 2004 or later or Windows 11. The installer works per user and installs `NTFY-Client.exe` in `%LOCALAPPDATA%\Programs\NTFY-Client`.
+1. Run [NTFY Client 0.2.4 Setup (x64)](bin/NTFY-Client-Setup-x64.exe) on Windows 10 version 2004 or later or Windows 11. The installer works per user and installs `NTFY-Client.exe` in `%LOCALAPPDATA%\Programs\NTFY-Client`.
 2. Open **NTFY Client – Settings** from the Start menu. Click **Add…** and enter a server URL such as `https://ntfy.example.org` and a topic such as `alerts`.
 3. For a private topic, enter an ntfy access token with read access to that topic. Token-authenticated subscriptions require HTTPS.
 4. Click **Apply**, then **Save**. The client validates the settings and restarts the receiver. You can close Settings while it runs in the background.
@@ -54,6 +54,8 @@ If several reminders arrive together, the client shows them one at a time. The c
 The client stores subscription settings in `%LOCALAPPDATA%\NtfyWindows\subscriptions.json`. Windows DPAPI encrypts access tokens for the signed-in Windows user. Scheduled reminders and their message details are stored separately in `%LOCALAPPDATA%\NtfyWindows\reminders.json`. You can remove these files after uninstalling if you want to discard the retained settings and reminders.
 
 If notifications appear in Notification Center without a banner, check the NTFY Client settings under **Settings → System → Notifications** and check whether **Do not disturb** is on.
+
+When NTFY Client can read the Windows **Do not disturb** state, it keeps receiving messages and stores them locally alongside due reminders. After you turn off **Do not disturb**, it delivers the queued items in order using the current display mode and sound. Reminder windows appear one at a time. Windows exposes this state through an undocumented system interface. If it is unavailable, the client uses its normal delivery behavior and Windows still controls native banners.
 
 ## Build from source
 

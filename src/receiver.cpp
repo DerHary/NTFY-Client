@@ -138,7 +138,7 @@ bool Stream(const Subscription& sub, HANDLE stop, HANDLE reconnect,
     std::wstring path(parts.lpszUrlPath, parts.dwUrlPathLength);
     if (parts.dwExtraInfoLength) path.append(parts.lpszExtraInfo, parts.dwExtraInfoLength);
 
-    HttpHandle session{WinHttpOpen(L"NTFY Client/0.2.3", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+    HttpHandle session{WinHttpOpen(L"NTFY Client/0.2.4", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC)};
     winrt::check_bool(session.value != nullptr);
     winrt::check_bool(WinHttpSetTimeouts(session.value, ConnectTimeout, ConnectTimeout,

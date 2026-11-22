@@ -6,6 +6,7 @@
 #include <unknwn.h>
 #include <winrt/Windows.Foundation.h>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -90,6 +91,7 @@ Settings LoadSettings();
 void SaveSettings(const Settings& settings);
 std::vector<Reminder> LoadReminders();
 void SaveReminders(const std::vector<Reminder>& reminders);
+std::optional<bool> WindowsDoNotDisturb();
 
 bool StopReceiver();
 bool StartReceiver();

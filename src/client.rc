@@ -68,8 +68,8 @@ BEGIN
 END
 
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION 0,2,3,0
-PRODUCTVERSION 0,2,3,0
+FILEVERSION 0,2,4,0
+PRODUCTVERSION 0,2,4,0
 FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
 FILEOS VOS_NT_WINDOWS32
 FILETYPE VFT_APP
@@ -79,9 +79,9 @@ BEGIN
         BLOCK "040904B0"
         BEGIN
             VALUE "FileDescription", "NTFY Client"
-            VALUE "FileVersion", "0.2.3"
+            VALUE "FileVersion", "0.2.4"
             VALUE "ProductName", "NTFY Client"
-            VALUE "ProductVersion", "0.2.3"
+            VALUE "ProductVersion", "0.2.4"
         END
     END
     BLOCK "VarFileInfo"

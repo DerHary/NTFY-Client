@@ -83,6 +83,11 @@ void EnsureRichEdit()
 }
 
 struct Delivery::State {
+    struct IncomingNotification {
+        Notification notification;
+        std::int64_t received;
+    };
+
     struct Card {
         Notification notification;
         std::wstring reminderId;
@@ -140,41 +145,76 @@ struct Delivery::State {
 
     void ReceiveIncoming()
     {
-        std::deque<Notification> batch;
+        if (quiet && !reminderStorageAvailable) return;
+        std::deque<IncomingNotification> batch;
         {
             std::scoped_lock lock(incomingMutex);
             batch.swap(incoming);
         }
-        for (const auto& item : batch) Enqueue(item);
+        if (batch.empty()) return;
+
+        const auto now = Now();
+        const bool dueWaiting = std::any_of(reminders.begin(), reminders.end(), [&](const auto& reminder) {
+            return reminder.due <= now && !reminder.presented;
+        });
+        if (!quiet && !dueWaiting) {
+            for (const auto& item : batch) Enqueue(item.notification);
+            return;
+        }
+        for (auto& item : batch) {
+            const auto position = std::upper_bound(reminders.begin(), reminders.end(), item.received,
+                [](std::int64_t time, const Reminder& entry) { return time < entry.due; });
+            reminders.insert(position, Reminder{NewId(), std::move(item.notification), item.received});
+        }
+        remindersDirty = true;
+    }
+
+    void CheckQuiet()
+    {
+        const bool current = WindowsDoNotDisturb().value_or(false);
+        if (current && !quiet) {
+            audio.Stop();
+            PlaySoundW(nullptr, nullptr, 0);
+        }
+        quiet = current;
     }
 
     void CheckDue()
     {
+        if (quiet || !cards.empty()) return;
         const auto now = Now();
-        bool removeDelivered = false;
-        for (auto& reminder : reminders) {
-            if (!reminder.presented && reminder.due <= now) {
-                Enqueue(reminder.notification, reminder.id);
-                reminder.presented = true;
-            }
-            removeDelivered |= reminder.presented && preferences.mode == DisplayMode::Windows;
+        const auto due = std::find_if(reminders.begin(), reminders.end(), [&](const Reminder& reminder) {
+            return reminder.due <= now && !reminder.presented;
+        });
+        if (due == reminders.end()) return;
+
+        if (preferences.mode == DisplayMode::Windows) {
+            const auto tick = GetTickCount64();
+            if (tick < nextBanner) return;
+            Notify(due->notification);
+            nextBanner = tick + 1500;
+            reminders.erase(due);
+            remindersDirty = true;
+        } else {
+            Enqueue(due->notification, due->id);
+            due->presented = true;
         }
-        if (removeDelivered) {
-            auto pending = reminders;
-            pending.erase(std::remove_if(pending.begin(), pending.end(),
-                [](const Reminder& reminder) { return reminder.presented; }), pending.end());
-            try {
-                SaveReminders(pending);
-                reminders = std::move(pending);
-            } catch (...) {
-                // Retry persistence without repeating delivery during this process.
-            }
+    }
+
+    void FlushReminders()
+    {
+        if (!remindersDirty) return;
+        try {
+            SaveReminders(reminders);
+            remindersDirty = false;
+        } catch (...) {
+            // Keep the current queue in memory and retry without repeating delivery.
         }
     }
 
     void CheckPopup()
     {
-        if (cards.empty()) {
+        if (quiet || cards.empty()) {
             if (popup) ShowWindow(popup, SW_HIDE);
             return;
         }
@@ -246,6 +286,7 @@ struct Delivery::State {
             }
             SaveReminders(pending);
             reminders = std::move(pending);
+            remindersDirty = false;
         }
         cards.pop_front();
         ShowWindow(popup, SW_HIDE);
@@ -348,11 +389,14 @@ struct Delivery::State {
     winrt::handle incomingEvent;
     const bool testing;
     std::mutex incomingMutex;
-    std::deque<Notification> incoming;
+    std::deque<IncomingNotification> incoming;
     std::deque<Card> cards;
     std::vector<Reminder> reminders;
     std::vector<ReminderLinkRange> linkRanges;
     bool reminderStorageAvailable = true;
+    bool remindersDirty = false;
+    bool quiet = false;
+    ULONGLONG nextBanner = 0;
     AudioPlayer audio;
     HWND audioWindow = nullptr;
     HWND popup = nullptr;
@@ -391,7 +435,7 @@ void Delivery::Publish(Notification message)
 {
     {
         std::scoped_lock lock(state_->incomingMutex);
-        state_->incoming.push_back(std::move(message));
+        state_->incoming.push_back({std::move(message), Now()});
     }
     SetEvent(state_->incomingEvent.get());
 }
@@ -400,12 +444,16 @@ void Delivery::Pump(HANDLE stop)
 {
     const HANDLE signals[] = {stop, state_->incomingEvent.get()};
     while (WaitForSingleObject(stop, 0) == WAIT_TIMEOUT) {
+        state_->CheckQuiet();
         state_->ReceiveIncoming();
+        state_->FlushReminders();
         state_->CheckDue();
+        state_->FlushReminders();
         state_->CheckPopup();
 
         const DWORD wait = MsgWaitForMultipleObjects(ARRAYSIZE(signals), signals, FALSE,
-            state_->reminders.empty() ? INFINITE : 1000, QS_ALLINPUT);
+            state_->quiet || state_->remindersDirty || !state_->reminders.empty() || !state_->cards.empty()
+                ? 1000 : INFINITE, QS_ALLINPUT);
         if (wait == WAIT_OBJECT_0) return;
         if (wait == WAIT_FAILED) winrt::throw_last_error();
         MSG message{};
