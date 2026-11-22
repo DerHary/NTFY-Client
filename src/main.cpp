@@ -73,13 +73,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
             MutexLock control(ControlMutex, 8000);
             return control && StopReceiver() ? 0 : 1;
         }
-        winrt::init_apartment(background ? winrt::apartment_type::multi_threaded :
-            winrt::apartment_type::single_threaded);
+        winrt::init_apartment(winrt::apartment_type::single_threaded);
         winrt::check_hresult(SetCurrentProcessExplicitAppUserModelID(AppId));
-        if (mode == L"--receive") return RunReceiver();
+        if (mode == L"--receive") return RunReceiver(instance);
         if (count == 1 || mode == L"--settings") return OpenSettings(instance);
     } catch (...) {
-        if (!background) MessageBoxW(nullptr, L"Die Anwendung konnte nicht gestartet werden.",
+        if (!background) MessageBoxW(nullptr, L"Could not start NTFY Client.",
             SettingsTitle, MB_OK | MB_ICONERROR);
     }
     return 1;

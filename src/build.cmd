@@ -27,11 +27,11 @@ pushd "%~dp0" || exit /b 1
 rc /nologo /fo "%WORK%\client.res" client.rc
 if errorlevel 1 goto :failed
 cl /nologo /std:c++17 /permissive- /Zc:__cplusplus /W4 /EHsc /O2 /MT /utf-8 /DUNICODE /D_UNICODE ^
-    /Fo"%WORK%\\" /Fe"%WORK%\NtfyWindows.exe" main.cpp config.cpp receiver.cpp settings.cpp "%WORK%\client.res" ^
+    /Fo"%WORK%\\" /Fe"%WORK%\NTFY-Client.exe" main.cpp config.cpp receiver.cpp settings.cpp audio.cpp delivery.cpp reminder_style.cpp notification_details.cpp "%WORK%\client.res" ^
     /link /SUBSYSTEM:WINDOWS /MACHINE:X64 /MANIFEST:NO shell32.lib ole32.lib shlwapi.lib user32.lib gdi32.lib ^
-    windowsapp.lib winhttp.lib crypt32.lib powrprof.lib
+    windowsapp.lib winhttp.lib crypt32.lib powrprof.lib winmm.lib comctl32.lib
 if errorlevel 1 goto :failed
-"%INNO%" /DClientExe="%WORK%\NtfyWindows.exe" setup.iss
+"%INNO%" /DClientExe="%WORK%\NTFY-Client.exe" setup.iss
 if errorlevel 1 goto :failed
 popd
 exit /b 0

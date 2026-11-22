@@ -1,4 +1,5 @@
 #include "client.hpp"
+#include "notification_details.hpp"
 
 #include <shlobj.h>
 #include <wincrypt.h>
@@ -6,6 +7,7 @@
 #include <winrt/Windows.Data.Json.h>
 #include <winrt/Windows.Foundation.Collections.h>
 #include <filesystem>
+#include <cmath>
 #include <fstream>
 #include <iterator>
 #include <memory>
@@ -16,12 +18,42 @@ using namespace winrt::Windows::Data::Json;
 namespace {
 constexpr auto MaxConfigBytes = 2 * 1024 * 1024;
 
-fs::path ConfigPath()
+fs::path ConfigPath(const wchar_t* name)
 {
     PWSTR raw = nullptr;
     winrt::check_hresult(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &raw));
     const std::unique_ptr<wchar_t, decltype(&CoTaskMemFree)> folder(raw, CoTaskMemFree);
-    return fs::path(folder.get()) / L"NtfyWindows" / L"subscriptions.json";
+    return fs::path(folder.get()) / L"NtfyWindows" / name;
+}
+
+JsonObject ReadJson(const fs::path& path)
+{
+    if (!fs::exists(path)) return nullptr;
+    if (fs::file_size(path) > MaxConfigBytes) throw UserError{L"The data file is too large."};
+    std::ifstream file(path, std::ios::binary);
+    if (!file) throw UserError{L"The data file could not be opened."};
+    const std::string bytes{std::istreambuf_iterator<char>(file), {}};
+    return JsonObject::Parse(winrt::to_hstring(bytes));
+}
+
+void WriteJson(const fs::path& path, const JsonObject& root)
+{
+    const auto bytes = winrt::to_string(root.Stringify());
+    if (bytes.size() > MaxConfigBytes) throw UserError{L"The data file is too large."};
+    fs::create_directories(path.parent_path());
+    auto temporary = path;
+    temporary += L".tmp";
+    try {
+        std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
+        file.exceptions(std::ios::failbit | std::ios::badbit);
+        file.write(bytes.data(), bytes.size());
+        file.close();
+        winrt::check_bool(MoveFileExW(temporary.c_str(), path.c_str(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH));
+    } catch (...) {
+        DeleteFileW(temporary.c_str());
+        throw;
+    }
 }
 
 struct WipeString {
@@ -43,7 +75,7 @@ struct ProtectedBuffer {
 
 std::wstring NormalizeServer(std::wstring value, bool authenticated)
 {
-    constexpr auto Error = L"Eine gültige Server-URL mit http:// oder https:// eingeben.";
+    constexpr auto Error = L"Enter a valid server URL starting with http:// or https://.";
     const auto first = value.find_first_not_of(L" \t");
     if (first == std::wstring::npos) throw UserError{Error};
     value = value.substr(first, value.find_last_not_of(L" \t") - first + 1);
@@ -59,7 +91,7 @@ std::wstring NormalizeServer(std::wstring value, bool authenticated)
         throw UserError{Error};
     }
     if (authenticated && parts.nScheme != INTERNET_SCHEME_HTTPS) {
-        throw UserError{L"Für ein Abo mit Zugriffstoken ist HTTPS erforderlich."};
+        throw UserError{L"HTTPS is required for a subscription with an access token."};
     }
 
     try {
@@ -122,41 +154,44 @@ std::wstring UnprotectToken(std::wstring_view protectedToken)
     ProtectedBuffer output;
     winrt::check_bool(CryptUnprotectData(&input, nullptr, nullptr, nullptr, nullptr,
         CRYPTPROTECT_UI_FORBIDDEN, &output.data));
-    if (output.data.cbData % sizeof(wchar_t)) throw UserError{L"Ungültige Token-Daten."};
+    if (output.data.cbData % sizeof(wchar_t)) throw UserError{L"Invalid token data."};
     return {reinterpret_cast<const wchar_t*>(output.data.pbData), output.data.cbData / sizeof(wchar_t)};
 }
 
-std::vector<Subscription> LoadSettings()
+Settings LoadSettings()
 {
-    const auto path = ConfigPath();
-    if (!fs::exists(path)) return {};
-    if (fs::file_size(path) > MaxConfigBytes) throw UserError{L"Die Einstellungsdatei ist zu groß."};
-    std::ifstream file(path, std::ios::binary);
-    if (!file) throw UserError{L"Die Einstellungsdatei konnte nicht geöffnet werden."};
-    const std::string bytes{std::istreambuf_iterator<char>(file), {}};
-    const auto root = JsonObject::Parse(winrt::to_hstring(bytes));
-    if (root.GetNamedNumber(L"version") != 1) throw UserError{L"Unbekanntes Einstellungsformat."};
+    Settings settings;
+    const auto root = ReadJson(ConfigPath(L"subscriptions.json"));
+    if (!root) return settings;
+    if (root.GetNamedNumber(L"version") != 1) throw UserError{L"Unknown settings format."};
     const auto entries = root.GetNamedArray(L"subscriptions");
-    if (entries.Size() > MaxSubscriptions) throw UserError{L"Zu viele Abos in der Einstellungsdatei."};
+    if (entries.Size() > MaxSubscriptions) throw UserError{L"Too many subscriptions in the settings file."};
 
-    std::vector<Subscription> subscriptions;
+    const auto mode = root.GetNamedString(L"notificationMode", L"windows");
+    if (mode == L"window") settings.notifications.mode = DisplayMode::Window;
+    if (mode == L"both") settings.notifications.mode = DisplayMode::Both;
+    settings.notifications.sound = root.GetNamedString(L"notificationSound", L"").c_str();
+    const auto theme = root.GetNamedString(L"reminderTheme", L"white-blue");
+    if (theme == L"midnight-mint") settings.notifications.theme = ReminderTheme::MidnightMint;
+    if (theme == L"slate-amber") settings.notifications.theme = ReminderTheme::SlateAmber;
+
     for (const auto& value : entries) {
         const auto object = value.GetObject();
         Subscription sub{object.GetNamedString(L"server").c_str(), object.GetNamedString(L"topic").c_str(),
             object.GetNamedString(L"protectedToken", L"").c_str()};
         if (!ValidTopic(sub.topic) || sub.protectedToken.size() > 8192) {
-            throw UserError{L"Ein Abo enthält ungültige Daten."};
+            throw UserError{L"A subscription contains invalid data."};
         }
         sub.server = NormalizeServer(std::move(sub.server), !sub.protectedToken.empty());
-        subscriptions.push_back(std::move(sub));
+        settings.subscriptions.push_back(std::move(sub));
     }
-    return subscriptions;
+    return settings;
 }
 
-void SaveSettings(const std::vector<Subscription>& subscriptions)
+void SaveSettings(const Settings& settings)
 {
     JsonArray entries;
-    for (const auto& sub : subscriptions) {
+    for (const auto& sub : settings.subscriptions) {
         JsonObject entry;
         entry.Insert(L"server", JsonValue::CreateStringValue(sub.server));
         entry.Insert(L"topic", JsonValue::CreateStringValue(sub.topic));
@@ -166,21 +201,50 @@ void SaveSettings(const std::vector<Subscription>& subscriptions)
     JsonObject root;
     root.Insert(L"version", JsonValue::CreateNumberValue(1));
     root.Insert(L"subscriptions", entries);
+    const auto mode = settings.notifications.mode;
+    root.Insert(L"notificationMode", JsonValue::CreateStringValue(
+        mode == DisplayMode::Both ? L"both" : mode == DisplayMode::Window ? L"window" : L"windows"));
+    root.Insert(L"notificationSound", JsonValue::CreateStringValue(settings.notifications.sound));
+    const auto theme = settings.notifications.theme;
+    root.Insert(L"reminderTheme", JsonValue::CreateStringValue(theme == ReminderTheme::MidnightMint ?
+        L"midnight-mint" : theme == ReminderTheme::SlateAmber ? L"slate-amber" : L"white-blue"));
+    WriteJson(ConfigPath(L"subscriptions.json"), root);
+}
 
-    const auto path = ConfigPath();
-    fs::create_directories(path.parent_path());
-    auto temporary = path;
-    temporary += L".tmp";
-    const auto bytes = winrt::to_string(root.Stringify());
-    try {
-        std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
-        file.exceptions(std::ios::failbit | std::ios::badbit);
-        file.write(bytes.data(), bytes.size());
-        file.close();
-        winrt::check_bool(MoveFileExW(temporary.c_str(), path.c_str(),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH));
-    } catch (...) {
-        DeleteFileW(temporary.c_str());
-        throw;
+std::vector<Reminder> LoadReminders()
+{
+    std::vector<Reminder> reminders;
+    const auto root = ReadJson(ConfigPath(L"reminders.json"));
+    if (!root) return reminders;
+    if (root.GetNamedNumber(L"version") != 1) throw UserError{L"Unknown reminder format."};
+    for (const auto& value : root.GetNamedArray(L"reminders")) {
+        const auto entry = value.GetObject();
+        const auto due = entry.GetNamedNumber(L"due");
+        if (!std::isfinite(due) || due < 0 || due > 253402300799.) {
+            throw UserError{L"Invalid reminder time."};
+        }
+        reminders.push_back({entry.GetNamedString(L"id").c_str(),
+            {entry.GetNamedString(L"title").c_str(), entry.GetNamedString(L"text").c_str(),
+                ReadSavedDetails(entry)},
+            static_cast<std::int64_t>(due)});
     }
+    return reminders;
+}
+
+void SaveReminders(const std::vector<Reminder>& reminders)
+{
+    JsonArray entries;
+    for (const auto& reminder : reminders) {
+        JsonObject entry;
+        entry.Insert(L"id", JsonValue::CreateStringValue(reminder.id));
+        entry.Insert(L"title", JsonValue::CreateStringValue(reminder.notification.title));
+        entry.Insert(L"text", JsonValue::CreateStringValue(reminder.notification.text));
+        entry.Insert(L"details", WriteDetails(reminder.notification.details));
+        entry.Insert(L"due", JsonValue::CreateNumberValue(static_cast<double>(reminder.due)));
+        entries.Append(entry);
+    }
+    JsonObject root;
+    root.Insert(L"version", JsonValue::CreateNumberValue(1));
+    root.Insert(L"reminders", entries);
+    WriteJson(ConfigPath(L"reminders.json"), root);
 }

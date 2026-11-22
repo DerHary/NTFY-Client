@@ -1,10 +1,10 @@
 #include "client.hpp"
+#include "delivery.hpp"
+#include "notification_details.hpp"
 
 #include <winhttp.h>
 #include <powrprof.h>
 #include <winrt/Windows.Data.Json.h>
-#include <winrt/Windows.Data.Xml.Dom.h>
-#include <winrt/Windows.UI.Notifications.h>
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -12,8 +12,6 @@
 #include <thread>
 
 using winrt::Windows::Data::Json::JsonObject;
-using winrt::Windows::Data::Xml::Dom::XmlDocument;
-using namespace winrt::Windows::UI::Notifications;
 
 namespace {
 constexpr DWORD ConnectTimeout = 15000;
@@ -99,17 +97,6 @@ private:
     std::atomic<DWORD> transferred_{0};
 };
 
-void ShowToast(const ToastNotifier& notifier, std::wstring_view title, std::wstring_view message)
-{
-    XmlDocument xml;
-    xml.LoadXml(L"<toast activationType=\"protocol\" launch=\"ntfywindows-client:settings\">"
-                L"<visual><binding template=\"ToastGeneric\"><text/><text/></binding></visual></toast>");
-    const auto fields = xml.GetElementsByTagName(L"text");
-    fields.Item(0).AppendChild(xml.CreateTextNode(title));
-    fields.Item(1).AppendChild(xml.CreateTextNode(message));
-    notifier.Show(ToastNotification(xml));
-}
-
 struct Cursor {
     std::deque<std::wstring> seen;
     std::wstring since = std::to_wstring(std::chrono::duration_cast<std::chrono::seconds>(
@@ -117,7 +104,7 @@ struct Cursor {
 };
 
 void HandleLine(const std::string& line, const Subscription& sub,
-    const ToastNotifier& notifier, Cursor& cursor)
+    Delivery& delivery, Cursor& cursor)
 {
     JsonObject event{nullptr};
     if (!JsonObject::TryParse(winrt::to_hstring(line), event) ||
@@ -126,10 +113,11 @@ void HandleLine(const std::string& line, const Subscription& sub,
     const std::wstring id(event.GetNamedString(L"id", L""));
     if (!id.empty() && std::find(cursor.seen.begin(), cursor.seen.end(), id) != cursor.seen.end()) return;
 
-    const auto title = event.GetNamedString(L"title", L"");
-    const auto message = event.GetNamedString(L"message", L"");
-    ShowToast(notifier, title.empty() ? std::wstring_view(sub.topic) : std::wstring_view(title),
-        std::wstring_view(message));
+    Notification notification{event.GetNamedString(L"title", L"").c_str(),
+        event.GetNamedString(L"message", L"").c_str(), {}};
+    if (notification.title.empty()) notification.title = sub.topic;
+    notification.details = IncomingDetails(event, sub.topic, notification.text);
+    delivery.Publish(std::move(notification));
 
     if (ValidTopic(id)) {
         cursor.since = id;
@@ -139,7 +127,7 @@ void HandleLine(const std::string& line, const Subscription& sub,
 }
 
 bool Stream(const Subscription& sub, HANDLE stop, HANDLE reconnect,
-    const ToastNotifier& notifier, Cursor& cursor)
+    Delivery& delivery, Cursor& cursor)
 {
     const std::wstring url = sub.server + L"/" + sub.topic + L"/json?since=" + cursor.since;
     URL_COMPONENTS parts{};
@@ -150,7 +138,7 @@ bool Stream(const Subscription& sub, HANDLE stop, HANDLE reconnect,
     std::wstring path(parts.lpszUrlPath, parts.dwUrlPathLength);
     if (parts.dwExtraInfoLength) path.append(parts.lpszExtraInfo, parts.dwExtraInfoLength);
 
-    HttpHandle session{WinHttpOpen(L"ntfy Windows Client/0.1", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+    HttpHandle session{WinHttpOpen(L"NTFY Client/0.2.3", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, WINHTTP_FLAG_ASYNC)};
     winrt::check_bool(session.value != nullptr);
     winrt::check_bool(WinHttpSetTimeouts(session.value, ConnectTimeout, ConnectTimeout,
@@ -209,9 +197,9 @@ bool Stream(const Subscription& sub, HANDLE stop, HANDLE reconnect,
             if (buffer[i] == '\n') {
                 if (!tooLong && !line.empty()) {
                     try {
-                        HandleLine(line, sub, notifier, cursor);
+                        HandleLine(line, sub, delivery, cursor);
                     } catch (...) {
-                        // Invalid payload or suppressed notification must not break the stream.
+                        // Invalid payloads must not break the stream.
                     }
                 }
                 line.clear();
@@ -226,17 +214,16 @@ bool Stream(const Subscription& sub, HANDLE stop, HANDLE reconnect,
     return received;
 }
 
-void Receive(const Subscription& sub, HANDLE stop, HANDLE reconnect)
+void Receive(const Subscription& sub, HANDLE stop, HANDLE reconnect, Delivery& delivery)
 {
     winrt::init_apartment();
     try {
-        const auto notifier = ToastNotificationManager::CreateToastNotifier(AppId);
         Cursor cursor;
         DWORD delay = 1000;
         while (WaitForSingleObject(stop, 0) == WAIT_TIMEOUT) {
             ResetEvent(reconnect);
             try {
-                if (Stream(sub, stop, reconnect, notifier, cursor)) delay = 1000;
+                if (Stream(sub, stop, reconnect, delivery, cursor)) delay = 1000;
             } catch (...) {
                 // Connection and token failures are retried without logging credentials or URLs.
             }
@@ -246,7 +233,7 @@ void Receive(const Subscription& sub, HANDLE stop, HANDLE reconnect)
             delay = wait == WAIT_OBJECT_0 + 1 ? 1000 : std::min(delay * 2, 30000UL);
         }
     } catch (...) {
-        OutputDebugStringW(L"ntfy: Windows-Benachrichtigungsdienst konnte nicht geöffnet werden.\n");
+        OutputDebugStringW(L"ntfy: receiver worker could not start.\n");
     }
     winrt::uninit_apartment();
 }
@@ -262,11 +249,13 @@ ULONG CALLBACK OnPower(PVOID context, ULONG type, PVOID)
 }
 }
 
-int RunReceiver()
+int RunReceiver(HINSTANCE windowInstance)
 {
     MutexLock instance(ReceiverMutex);
     if (!instance) return 0;
-    const auto subscriptions = LoadSettings();
+    const auto settings = LoadSettings();
+    const auto& subscriptions = settings.subscriptions;
+    Delivery delivery(windowInstance, settings.notifications);
 
     winrt::handle stop(CreateEventW(nullptr, TRUE, FALSE, ReceiverStop));
     winrt::check_bool(static_cast<bool>(stop));
@@ -288,9 +277,11 @@ int RunReceiver()
     try {
         workers.reserve(subscriptions.size());
         for (size_t i = 0; i < subscriptions.size(); ++i) {
-            workers.emplace_back(Receive, std::cref(subscriptions[i]), stop.get(), reconnect[i].get());
+            workers.emplace_back(Receive, std::cref(subscriptions[i]), stop.get(), reconnect[i].get(),
+                std::ref(delivery));
         }
-        WaitForSingleObject(stop.get(), INFINITE);
+        delivery.Pump(stop.get());
+        SetEvent(stop.get());
     } catch (...) {
         SetEvent(stop.get());
         result = 1;

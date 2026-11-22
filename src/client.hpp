@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <unknwn.h>
 #include <winrt/Windows.Foundation.h>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -13,13 +14,54 @@ inline constexpr wchar_t ReceiverMutex[] = L"Local\\NtfyWindows.Client.Receiver"
 inline constexpr wchar_t ReceiverStop[] = L"Local\\NtfyWindows.Client.Stop";
 inline constexpr wchar_t SettingsMutex[] = L"Local\\NtfyWindows.Client.Settings";
 inline constexpr wchar_t ControlMutex[] = L"Local\\NtfyWindows.Client.Control";
-inline constexpr wchar_t SettingsTitle[] = L"ntfy – Einstellungen";
+inline constexpr wchar_t SettingsTitle[] = L"NTFY Client – Settings";
 inline constexpr size_t MaxSubscriptions = 64;
 
 struct Subscription {
     std::wstring server;
     std::wstring topic;
     std::wstring protectedToken;
+};
+
+enum class DisplayMode { Windows, Window, Both };
+enum class ReminderTheme { WhiteBlue, MidnightMint, SlateAmber };
+
+struct NotificationPreferences {
+    DisplayMode mode = DisplayMode::Windows;
+    std::wstring sound;
+    ReminderTheme theme = ReminderTheme::WhiteBlue;
+};
+
+struct Settings {
+    std::vector<Subscription> subscriptions;
+    NotificationPreferences notifications;
+};
+
+struct NotificationLink {
+    std::wstring label;
+    std::wstring url;
+};
+
+struct NotificationDetails {
+    int priority = 0;
+    std::int64_t time = 0;
+    std::wstring topic;
+    std::vector<std::wstring> tags;
+    std::wstring attachment;
+    std::vector<NotificationLink> links;
+};
+
+struct Notification {
+    std::wstring title;
+    std::wstring text;
+    NotificationDetails details;
+};
+
+struct Reminder {
+    std::wstring id;
+    Notification notification;
+    std::int64_t due;
+    bool presented = false;
 };
 
 struct UserError {
@@ -44,10 +86,12 @@ bool ValidTopic(std::wstring_view value);
 bool ValidToken(std::wstring_view value);
 std::wstring ProtectToken(std::wstring& token);
 std::wstring UnprotectToken(std::wstring_view protectedToken);
-std::vector<Subscription> LoadSettings();
-void SaveSettings(const std::vector<Subscription>& subscriptions);
+Settings LoadSettings();
+void SaveSettings(const Settings& settings);
+std::vector<Reminder> LoadReminders();
+void SaveReminders(const std::vector<Reminder>& reminders);
 
 bool StopReceiver();
 bool StartReceiver();
-int RunReceiver();
+int RunReceiver(HINSTANCE instance);
 int OpenSettings(HINSTANCE instance);
