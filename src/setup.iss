@@ -2,7 +2,7 @@
   #define ClientExe "..\..\.build\ntfy-client\NTFY-Client.exe"
 #endif
 #define AppName "NTFY Client"
-#define AppVersion "0.2.5"
+#define AppVersion "1.0.0"
 #define ExeName "NTFY-Client.exe"
 #define Aumid "NtfyWindows.Client"
 #define SettingsMutex "Local\NtfyWindows.Client.Settings"
