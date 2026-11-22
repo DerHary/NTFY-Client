@@ -49,13 +49,21 @@ If several reminders arrive together, the client shows them one at a time. The c
 
 ![Slate and amber reminder preview with message details and no links](docs/screenshots/reminder-no-link.png)
 
+## Windows Do not disturb
+
+While **Do not disturb** is active, NTFY Client keeps receiving messages and queues them locally along with any reminders that become due. Queued items stay silent and survive a receiver restart.
+
+When you turn **Do not disturb** off, the client delivers the queued items in order using the current display mode and sound. If you use reminder windows, they appear one at a time.
+
+To try it, turn on **Do not disturb** in Windows, publish a message to one of your subscriptions, and turn the mode off again. The message should appear only after you turn it off. This was verified with the Windows 11 switch.
+
+The client reads the active state through an undocumented Windows interface. If the state cannot be read, the client uses its normal delivery behavior and Windows still controls native banners.
+
 ## Local data and Windows notifications
 
-The client stores subscription settings in `%LOCALAPPDATA%\NtfyWindows\subscriptions.json`. Windows DPAPI encrypts access tokens for the signed-in Windows user. Scheduled reminders and their message details are stored separately in `%LOCALAPPDATA%\NtfyWindows\reminders.json`. You can remove these files after uninstalling if you want to discard the retained settings and reminders.
+The client stores subscription settings in `%LOCALAPPDATA%\NtfyWindows\subscriptions.json`. Windows DPAPI encrypts access tokens for the signed-in Windows user. Scheduled reminders and queued messages are stored separately in `%LOCALAPPDATA%\NtfyWindows\reminders.json`. You can remove these files after uninstalling if you want to discard the retained settings, reminders, and queued messages.
 
 If notifications appear in Notification Center without a banner, check the NTFY Client settings under **Settings → System → Notifications** and check whether **Do not disturb** is on.
-
-When NTFY Client can read the Windows **Do not disturb** state, it keeps receiving messages and stores them locally alongside due reminders. After you turn off **Do not disturb**, it delivers the queued items in order using the current display mode and sound. Reminder windows appear one at a time. Windows exposes this state through an undocumented system interface. If it is unavailable, the client uses its normal delivery behavior and Windows still controls native banners.
 
 ## Build from source
 
