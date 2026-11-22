@@ -37,7 +37,9 @@ If several reminders arrive together, the client shows them one at a time. The c
 
 ### Reminder themes
 
-The fixed themes include the original **White & Blue**, **Midnight Mint**, and **Slate & Amber** alongside five more palettes.
+The gallery shows all nine themes. In the top row, **White & Blue** shows a single link in the header, **Midnight Mint** shows multiple links in the message, and **Slate & Amber** shows a reminder without links.
+
+![Nine reminder themes in three rows: White and Blue, Midnight Mint, Slate and Amber; Rose Quartz, Sea Glass, Lavender Ink; Deep Ocean, Graphite and Lime, Follow Windows](docs/screenshots/reminder-themes.png)
 
 | Theme | Colors |
 | --- | --- |
@@ -47,22 +49,6 @@ The fixed themes include the original **White & Blue**, **Midnight Mint**, and *
 | **Deep Ocean** | A navy background with a bright cyan accent. |
 | **Graphite & Lime** | A charcoal background with a bright lime accent. |
 | **Follow Windows** | Uses the Windows light or dark app mode and a readable shade of the system accent. Changes to Windows colors take effect the next time a reminder window opens. |
-
-![New themes, top row Rose Quartz, Sea Glass, and Lavender Ink, bottom row Deep Ocean, Graphite and Lime, and Follow Windows in dark mode with a blue system accent](docs/screenshots/reminder-themes.png)
-
-### Test notification previews
-
-**White & Blue · One link** shows the **Open link** button in the header.
-
-![White and blue reminder preview with one Open link button](docs/screenshots/reminder-single-link.png)
-
-**Midnight Mint · Multiple links** shows an attachment and links in the message area.
-
-![Dark mint reminder preview with two clickable links in the message area](docs/screenshots/reminder-multiple-links.png)
-
-**Slate & Amber · No link** shows the same message without link controls.
-
-![Slate and amber reminder preview with message details and no links](docs/screenshots/reminder-no-link.png)
 
 ## Windows Do not disturb
 
