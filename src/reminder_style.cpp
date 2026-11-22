@@ -4,9 +4,12 @@
 #include <commctrl.h>
 #include <richedit.h>
 #include <windowsx.h>
+#include <winrt/Windows.UI.ViewManagement.h>
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <ctime>
+#include <memory>
 
 namespace {
 constexpr wchar_t ThemeProperty[] = L"NTFY.Client.ReminderTheme";
@@ -41,21 +44,102 @@ struct Theme : Palette {
     }
 };
 
+const Palette& FixedColors(ReminderTheme theme)
+{
+    static constexpr Palette themes[] = {
+        // White & Blue
+        {RGB(249, 252, 255), RGB(235, 245, 255), RGB(170, 195, 223), RGB(20, 48, 82),
+            RGB(75, 101, 132), RGB(27, 96, 191), RGB(18, 75, 163), RGB(255, 255, 255)},
+        // Midnight Mint
+        {RGB(19, 28, 37), RGB(27, 41, 51), RGB(55, 77, 88), RGB(238, 247, 247),
+            RGB(171, 194, 201), RGB(135, 236, 199), RGB(106, 206, 170), RGB(13, 37, 33)},
+        // Slate & Amber
+        {RGB(35, 31, 28), RGB(48, 40, 34), RGB(94, 77, 66), RGB(255, 250, 241),
+            RGB(215, 194, 173), RGB(255, 198, 113), RGB(232, 171, 85), RGB(49, 33, 18)},
+        // Rose Quartz
+        {RGB(255, 245, 246), RGB(252, 225, 232), RGB(204, 148, 164), RGB(67, 28, 45),
+            RGB(118, 64, 83), RGB(151, 33, 80), RGB(120, 20, 61), RGB(255, 255, 255)},
+        // Sea Glass
+        {RGB(245, 252, 245), RGB(218, 243, 228), RGB(139, 190, 164), RGB(20, 57, 45),
+            RGB(57, 103, 84), RGB(0, 106, 84), RGB(0, 79, 63), RGB(255, 255, 255)},
+        // Lavender Ink
+        {RGB(41, 27, 56), RGB(60, 40, 78), RGB(117, 86, 146), RGB(252, 245, 255),
+            RGB(212, 190, 232), RGB(222, 178, 255), RGB(198, 148, 242), RGB(48, 20, 70)},
+        // Deep Ocean
+        {RGB(8, 31, 54), RGB(13, 53, 84), RGB(54, 112, 146), RGB(237, 250, 255),
+            RGB(157, 206, 232), RGB(76, 214, 250), RGB(38, 182, 224), RGB(6, 39, 59)},
+        // Graphite & Lime
+        {RGB(24, 26, 21), RGB(36, 41, 29), RGB(92, 103, 69), RGB(247, 250, 239),
+            RGB(197, 209, 178), RGB(195, 240, 84), RGB(163, 209, 56), RGB(28, 39, 10)},
+    };
+    static_assert(ARRAYSIZE(themes) == static_cast<size_t>(ReminderTheme::FollowWindows));
+    static_assert(ARRAYSIZE(themes) + 1 == ARRAYSIZE(ReminderThemes));
+    const auto index = static_cast<size_t>(theme);
+    return themes[index < ARRAYSIZE(themes) ? index : 0];
+}
+
+COLORREF Mix(COLORREF base, COLORREF tint, int percent)
+{
+    const auto channel = [percent](int from, int to) {
+        return (from * (100 - percent) + to * percent + 50) / 100;
+    };
+    return RGB(channel(GetRValue(base), GetRValue(tint)), channel(GetGValue(base), GetGValue(tint)),
+        channel(GetBValue(base), GetBValue(tint)));
+}
+
+double Luminance(COLORREF color)
+{
+    const auto linear = [](BYTE channel) {
+        const double value = channel / 255.0;
+        return value <= 0.04045 ? value / 12.92 : std::pow((value + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * linear(GetRValue(color)) + 0.7152 * linear(GetGValue(color)) +
+        0.0722 * linear(GetBValue(color));
+}
+
+Palette WindowsColors()
+{
+    using namespace winrt::Windows::UI::ViewManagement;
+    try {
+        const UISettings settings;
+        const auto color = [&](UIColorType type) {
+            const auto value = settings.GetColorValue(type);
+            return RGB(value.R, value.G, value.B);
+        };
+        const auto surface = color(UIColorType::Background);
+        const auto text = color(UIColorType::Foreground);
+        const bool dark = Luminance(text) > Luminance(surface);
+        const auto panel = Mix(surface, text, dark ? 11 : 6);
+        const auto muted = Mix(surface, text, 72);
+        const auto line = Mix(surface, text, 32);
+
+        // The same accent is used for links and for the main action. Keep both readable.
+        auto accent = text;
+        const auto panelLight = Luminance(panel) + 0.05;
+        for (auto shade : {UIColorType::Accent, dark ? UIColorType::AccentLight1 : UIColorType::AccentDark1,
+                 dark ? UIColorType::AccentLight2 : UIColorType::AccentDark2,
+                 dark ? UIColorType::AccentLight3 : UIColorType::AccentDark3}) {
+            const auto candidate = color(shade);
+            const auto accentLight = Luminance(candidate) + 0.05;
+            if ((dark ? accentLight / panelLight : panelLight / accentLight) >= 4.5) {
+                accent = candidate;
+                break;
+            }
+        }
+        constexpr COLORREF white = RGB(255, 255, 255), black = RGB(0, 0, 0);
+        const bool lightAccent = Luminance(accent) >= 0.179;
+        return {surface, panel, line, text, muted, accent, Mix(accent, lightAccent ? white : black, 18),
+            lightAccent ? black : white};
+    } catch (const winrt::hresult_error&) {
+        return FixedColors(ReminderTheme::WhiteBlue);
+    }
+}
+
 const Theme& Colors(HWND window)
 {
-    static const Theme whiteBlue({
-        RGB(249, 252, 255), RGB(235, 245, 255), RGB(170, 195, 223), RGB(20, 48, 82),
-        RGB(75, 101, 132), RGB(27, 96, 191), RGB(18, 75, 163), RGB(255, 255, 255)});
-    static const Theme midnightMint({
-        RGB(19, 28, 37), RGB(27, 41, 51), RGB(55, 77, 88), RGB(238, 247, 247),
-        RGB(171, 194, 201), RGB(135, 236, 199), RGB(106, 206, 170), RGB(13, 37, 33)});
-    static const Theme slateAmber({
-        RGB(35, 31, 28), RGB(48, 40, 34), RGB(94, 77, 66), RGB(255, 250, 241),
-        RGB(215, 194, 173), RGB(255, 198, 113), RGB(232, 171, 85), RGB(49, 33, 18)});
-    const auto value = reinterpret_cast<UINT_PTR>(GetPropW(window, ThemeProperty));
-    if (value == static_cast<UINT_PTR>(ReminderTheme::MidnightMint) + 1) return midnightMint;
-    if (value == static_cast<UINT_PTR>(ReminderTheme::SlateAmber) + 1) return slateAmber;
-    return whiteBlue;
+    if (const auto* theme = reinterpret_cast<const Theme*>(GetPropW(window, ThemeProperty))) return *theme;
+    static const Theme fallback(FixedColors(ReminderTheme::WhiteBlue));
+    return fallback;
 }
 
 int Scale(HWND window, int pixels)
@@ -235,7 +319,9 @@ void FormatText(HWND edit, DWORD scope, COLORREF color, bool link = false)
 
 void StyleReminderWindow(HWND window, ReminderTheme theme)
 {
-    SetPropW(window, ThemeProperty, reinterpret_cast<HANDLE>(static_cast<UINT_PTR>(theme) + 1));
+    auto colors = std::make_unique<Theme>(
+        theme == ReminderTheme::FollowWindows ? WindowsColors() : FixedColors(theme));
+    if (SetPropW(window, ThemeProperty, colors.get())) colors.release();
     RECT client{};
     GetClientRect(window, &client);
     const auto style = GetWindowLongPtrW(window, GWL_STYLE);
@@ -335,7 +421,7 @@ std::vector<ReminderLinkRange> SetReminderBody(HWND window, const Notification& 
 INT_PTR PaintReminderWindow(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
     if (message == WM_SIZE) RoundReminderWindow(window);
-    if (message == WM_NCDESTROY) RemovePropW(window, ThemeProperty);
+    if (message == WM_NCDESTROY) delete reinterpret_cast<Theme*>(RemovePropW(window, ThemeProperty));
     if (message == WM_PAINT) {
         DrawCard(window);
         return TRUE;

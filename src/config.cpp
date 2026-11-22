@@ -171,9 +171,13 @@ Settings LoadSettings()
     if (mode == L"window") settings.notifications.mode = DisplayMode::Window;
     if (mode == L"both") settings.notifications.mode = DisplayMode::Both;
     settings.notifications.sound = root.GetNamedString(L"notificationSound", L"").c_str();
-    const auto theme = root.GetNamedString(L"reminderTheme", L"white-blue");
-    if (theme == L"midnight-mint") settings.notifications.theme = ReminderTheme::MidnightMint;
-    if (theme == L"slate-amber") settings.notifications.theme = ReminderTheme::SlateAmber;
+    const auto theme = root.GetNamedString(L"reminderTheme", ReminderThemes[0].key);
+    for (size_t index = 0; index < ARRAYSIZE(ReminderThemes); ++index) {
+        if (theme == ReminderThemes[index].key) {
+            settings.notifications.theme = static_cast<ReminderTheme>(index);
+            break;
+        }
+    }
 
     for (const auto& value : entries) {
         const auto object = value.GetObject();
@@ -205,9 +209,8 @@ void SaveSettings(const Settings& settings)
     root.Insert(L"notificationMode", JsonValue::CreateStringValue(
         mode == DisplayMode::Both ? L"both" : mode == DisplayMode::Window ? L"window" : L"windows"));
     root.Insert(L"notificationSound", JsonValue::CreateStringValue(settings.notifications.sound));
-    const auto theme = settings.notifications.theme;
-    root.Insert(L"reminderTheme", JsonValue::CreateStringValue(theme == ReminderTheme::MidnightMint ?
-        L"midnight-mint" : theme == ReminderTheme::SlateAmber ? L"slate-amber" : L"white-blue"));
+    const auto theme = static_cast<size_t>(settings.notifications.theme);
+    root.Insert(L"reminderTheme", JsonValue::CreateStringValue(ReminderThemes[theme].key));
     WriteJson(ConfigPath(L"subscriptions.json"), root);
 }
 

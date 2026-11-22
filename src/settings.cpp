@@ -176,8 +176,8 @@ void InitPreferences(HWND window)
         AddChoice(window, IDC_DISPLAY_MODE, label);
     }
     SendDlgItemMessageW(window, IDC_DISPLAY_MODE, CB_SETCURSEL, static_cast<WPARAM>(preferences.mode), 0);
-    for (const wchar_t* label : {L"White & Blue", L"Midnight Mint", L"Slate & Amber"}) {
-        AddChoice(window, IDC_REMINDER_THEME, label);
+    for (const auto& theme : ReminderThemes) {
+        AddChoice(window, IDC_REMINDER_THEME, theme.label);
     }
     SendDlgItemMessageW(window, IDC_REMINDER_THEME, CB_SETCURSEL, static_cast<WPARAM>(preferences.theme), 0);
     for (const wchar_t* label : {L"No link", L"One link", L"Multiple links"}) {
@@ -194,7 +194,7 @@ void UpdatePreferences(HWND window)
     const auto sound = SendDlgItemMessageW(window, IDC_SOUND, CB_GETCURSEL, 0, 0);
     const auto theme = SendDlgItemMessageW(window, IDC_REMINDER_THEME, CB_GETCURSEL, 0, 0);
     if (mode < 0 || mode > static_cast<LRESULT>(DisplayMode::Both) ||
-        theme < 0 || theme > static_cast<LRESULT>(ReminderTheme::SlateAmber) ||
+        theme < 0 || static_cast<size_t>(theme) >= ARRAYSIZE(ReminderThemes) ||
         sound < 0 || static_cast<size_t>(sound) > state.sounds.size()) return;
     auto& preferences = state.settings.notifications;
     preferences.mode = static_cast<DisplayMode>(mode);

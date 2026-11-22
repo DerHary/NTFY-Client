@@ -4,7 +4,7 @@ NTFY Client is a native Windows desktop client for self-hosted ntfy servers. It 
 
 ## Install and subscribe
 
-1. Run [NTFY Client 0.2.4 Setup (x64)](bin/NTFY-Client-Setup-x64.exe) on Windows 10 version 2004 or later or Windows 11. The installer works per user and installs `NTFY-Client.exe` in `%LOCALAPPDATA%\Programs\NTFY-Client`.
+1. Run [NTFY Client 0.2.5 Setup (x64)](bin/NTFY-Client-Setup-x64.exe) on Windows 10 version 2004 or later or Windows 11. The installer works per user and installs `NTFY-Client.exe` in `%LOCALAPPDATA%\Programs\NTFY-Client`.
 2. Open **NTFY Client – Settings** from the Start menu. Click **Add…** and enter a server URL such as `https://ntfy.example.org` and a topic such as `alerts`.
 3. For a private topic, enter an ntfy access token with read access to that topic. Token-authenticated subscriptions require HTTPS.
 4. Click **Apply**, then **Save**. The client validates the settings and restarts the receiver. You can close Settings while it runs in the background.
@@ -19,12 +19,12 @@ You can add, edit, and remove multiple subscriptions, including subscriptions on
 | **Notification sound** | Uses **Windows default** or one of the 35 bundled tones. It also lists any MP3 or WAV files you add. |
 | **Preview** | Plays the selected tone so you can listen before saving. |
 | **Open sounds folder** | Opens the installation's writable `sounds` folder in File Explorer. Copy an MP3 or WAV into it, then reopen the sound list. |
-| **Reminder theme** | Sets the reminder window to **White & Blue**, **Midnight Mint**, or **Slate & Amber**. |
+| **Reminder theme** | Choose from eight fixed palettes or select **Follow Windows**. See the [theme previews](#reminder-themes) below. |
 | **Test sample** and **Test notification** | Try an example with no link, one link, or multiple links using your current display mode, tone, and theme before saving. The test stays local and creates no scheduled reminder. |
 
 When you use a custom tone with **Both**, the client plays it once and silences the accompanying Windows banner.
 
-![NTFY Client Settings with notification controls and example subscriptions](docs/screenshots/settings.png)
+![NTFY Client Settings with Follow Windows selected and two example subscriptions](docs/screenshots/settings.png)
 
 ## Reminder window
 
@@ -34,6 +34,21 @@ The window shows the original title and message, plus the priority, local timest
 - **Remind again** schedules it locally for **1–60 Minutes, Hours, or Days**. The reminder keeps the message details and works independently of its subscription. Overdue reminders are shown when the receiver next runs or resumes, using the current display mode and sound.
 
 If several reminders arrive together, the client shows them one at a time. The counter shows how many are waiting.
+
+### Reminder themes
+
+The fixed themes include the original **White & Blue**, **Midnight Mint**, and **Slate & Amber** alongside five more palettes.
+
+| Theme | Colors |
+| --- | --- |
+| **Rose Quartz** | A pale pink background with a berry accent. |
+| **Sea Glass** | A light green background with a deep teal accent. |
+| **Lavender Ink** | A dark plum background with a soft lavender accent. |
+| **Deep Ocean** | A navy background with a bright cyan accent. |
+| **Graphite & Lime** | A charcoal background with a bright lime accent. |
+| **Follow Windows** | Uses the Windows light or dark app mode and a readable shade of the system accent. Changes to Windows colors take effect the next time a reminder window opens. |
+
+![New themes, top row Rose Quartz, Sea Glass, and Lavender Ink, bottom row Deep Ocean, Graphite and Lime, and Follow Windows in dark mode with a blue system accent](docs/screenshots/reminder-themes.png)
 
 ### Test notification previews
 

@@ -25,7 +25,24 @@ struct Subscription {
 };
 
 enum class DisplayMode { Windows, Window, Both };
-enum class ReminderTheme { WhiteBlue, MidnightMint, SlateAmber };
+enum class ReminderTheme {
+    WhiteBlue, MidnightMint, SlateAmber, RoseQuartz, SeaGlass, LavenderInk, DeepOcean, GraphiteLime, FollowWindows
+};
+
+inline constexpr struct {
+    const wchar_t* key;
+    const wchar_t* label;
+} ReminderThemes[] = {
+    {L"white-blue", L"White & Blue"},
+    {L"midnight-mint", L"Midnight Mint"},
+    {L"slate-amber", L"Slate & Amber"},
+    {L"rose-quartz", L"Rose Quartz"},
+    {L"sea-glass", L"Sea Glass"},
+    {L"lavender-ink", L"Lavender Ink"},
+    {L"deep-ocean", L"Deep Ocean"},
+    {L"graphite-lime", L"Graphite & Lime"},
+    {L"follow-windows", L"Follow Windows"},
+};
 
 struct NotificationPreferences {
     DisplayMode mode = DisplayMode::Windows;
