@@ -37,9 +37,9 @@ If several reminders arrive together, the client shows them one at a time. The c
 
 ### Reminder themes
 
-The gallery shows all nine themes. In the top row, **White & Blue** shows a single link in the header, **Midnight Mint** shows multiple links in the message, and **Slate & Amber** shows a reminder without links.
+All nine themes display the same test notification in this comparison. Each theme supports the same message details and link options.
 
-![Nine reminder themes in three rows: White and Blue, Midnight Mint, Slate and Amber; Rose Quartz, Sea Glass, Lavender Ink; Deep Ocean, Graphite and Lime, Follow Windows](docs/screenshots/reminder-themes.png)
+![The same test notification in all nine themes: White and Blue, Midnight Mint, Slate and Amber, Rose Quartz, Sea Glass, Lavender Ink, Deep Ocean, Graphite and Lime, and Follow Windows](docs/screenshots/reminder-themes.png)
 
 | Theme | Colors |
 | --- | --- |
